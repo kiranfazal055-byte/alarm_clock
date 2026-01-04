@@ -1,49 +1,46 @@
-# To run this app, make sure you have Streamlit and pyttsx3 installed.
-# Install via: pip install streamlit pyttsx3
-# Then run: streamlit run this_file.py
-
 import streamlit as st
-import pyttsx3
-import threading
+from gtts import gTTS
+import io
+import base64
 import datetime
 import time
+import threading
 
-st.title("Simple Alarm Clock App")
+st.title("Alarm Clock with Voice Message 🎙️")
 
-# Input for alarm time (time of day)
-alarm_time = st.time_input("Set the alarm time", value=datetime.time(8, 0))  # Default to 8:00 AM
-
-# Input for the message to speak
+alarm_time = st.time_input("Set the alarm time", value=datetime.time(8, 0))
 message = st.text_input("Enter the message to speak", value="Wake up!")
 
-# Button to set the alarm
 if st.button("Set Alarm"):
     if message:
         def trigger_alarm():
-            # Get current datetime
             now = datetime.datetime.now()
-            
-            # Combine today's date with the selected time
             alarm_datetime = datetime.datetime.combine(now.date(), alarm_time)
-            
-            # If the time is in the past, set it for tomorrow
             if alarm_datetime < now:
                 alarm_datetime += datetime.timedelta(days=1)
             
-            # Calculate seconds to wait
             wait_seconds = (alarm_datetime - now).total_seconds()
-            
-            # Wait until the alarm time
             time.sleep(wait_seconds)
             
-            # Initialize text-to-speech engine
-            engine = pyttsx3.init()
-            engine.say(message)
-            engine.runAndWait()
+            # Generate speech with gTTS
+            tts = gTTS(text=message, lang='en')
+            audio_bytes = io.BytesIO()
+            tts.write_to_fp(audio_bytes)
+            audio_bytes.seek(0)
+            
+            # Auto-play audio in browser
+            audio_base64 = base64.b64encode(audio_bytes.read()).decode()
+            audio_tag = f'''
+            <audio autoplay="true">
+                <source src="data:audio/mp3;base64,{audio_base64}" type="audio/mp3">
+            </audio>
+            '''
+            st.markdown(audio_tag, unsafe_allow_html=True)
+            st.success(f"🔔 Alarm triggered: {message}")
         
-        # Run the alarm in a background thread so the app doesn't block
-        threading.Thread(target=trigger_alarm).start()
-        
-        st.success(f"Alarm set for {alarm_time.strftime('%H:%M')} with message: '{message}'")
+        threading.Thread(target=trigger_alarm, daemon=True).start()
+        st.success(f"Alarm set for {alarm_time.strftime('%H:%M')} — Message: '{message}'")
     else:
-        st.warning("Please enter a message.")
+        st.warning("Enter a message!")
+
+st.info("Note: Alarms longer than ~10-15 minutes may not work reliably on the cloud version (app can sleep). Run locally for long alarms!")
